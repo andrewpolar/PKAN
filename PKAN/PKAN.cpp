@@ -33,6 +33,119 @@
 #include "Resorter.h"
 #include "SlidingWindow.h"
 
+//The next several functions are used for goodness-of-fit test
+double SplitVector(std::vector<double>& x, std::vector<double>& y, std::vector<double>& z) {
+    if (0 == x.size() % 2) {
+        int n1 = x.size() / 2;
+        double m = (x[n1] + x[n1 - 1]) / 2.0;
+        for (int i = 0; i < n1; ++i) {
+            y.push_back(x[i]);
+        }
+        for (int i = n1; i < x.size(); ++i) {
+            z.push_back(x[i]);
+        }
+        return m;
+    }
+    else {
+        int n1 = x.size() / 2;
+        double m = x[n1];
+        for (int i = 0; i < n1; ++i) {
+            y.push_back(x[i]);
+        }
+        for (int i = n1 + 1; i < x.size(); ++i) {
+            z.push_back(x[i]);
+        }
+        return m;
+    }
+}
+
+std::unique_ptr<double[]> ArrayToMedians7(std::unique_ptr<double[]>& z, int N) {
+    std::vector<double> x;
+    for (int i = 0; i < N; ++i) {
+        x.push_back(z[i]);
+    }
+    std::sort(x.begin(), x.end());
+    std::vector<double> m;
+
+    std::vector<double> left;
+    std::vector<double> right;
+    double m1 = SplitVector(x, left, right);
+    m.push_back(m1);
+
+    std::vector<double> left1;
+    std::vector<double> right1;
+    double m2 = SplitVector(left, left1, right1);
+    m.push_back(m2);
+
+    std::vector<double> left2;
+    std::vector<double> right2;
+    double m3 = SplitVector(right, left2, right2);
+    m.push_back(m3);
+
+    std::vector<double> left3;
+    std::vector<double> right3;
+    double m4 = SplitVector(left1, left3, right3);
+    m.push_back(m4);
+
+    std::vector<double> left4;
+    std::vector<double> right4;
+    double m5 = SplitVector(right1, left4, right4);
+    m.push_back(m5);
+
+    std::vector<double> left5;
+    std::vector<double> right5;
+    double m6 = SplitVector(left2, left5, right5);
+    m.push_back(m6);
+
+    std::vector<double> left6;
+    std::vector<double> right6;
+    double m7 = SplitVector(right2, left6, right6);
+    m.push_back(m7);
+
+    std::sort(m.begin(), m.end());
+    auto median = std::make_unique<double[]>(m.size());
+    for (int i = 0; i < m.size(); ++i) {
+        median[i] = m[i];
+    }
+    return median;
+}
+
+double RelativeDistance(std::unique_ptr<double[]>& x, std::unique_ptr<double[]>& y, int N) {
+    double normX = 0.0;
+    double normY = 0.0;
+    double normDiff = 0.0;
+    for (int i = 0; i < N; ++i) {
+        normDiff += (x[i] - y[i]) * (x[i] - y[i]);
+        normX += x[i] * x[i];
+        normY += y[i] * y[i];
+    }
+    normDiff = sqrt(normDiff);
+    normX = sqrt(normX);
+    normY = sqrt(normY);
+    return 2.0 * normDiff / (normX + normY);
+}
+
+bool PassedNestedMedianTest(std::unique_ptr<double[]>& xLong, std::unique_ptr<double[]>& xShort, int nLong, int nShort) {
+    auto medianLong = ArrayToMedians7(xLong, nLong);
+    auto sampleFromLong = std::make_unique<double[]>(nShort);
+
+    double maxDist = -DBL_MIN;
+    for (int k = 0; k < 100; ++k) {
+        for (int i = 0; i < nShort; ++i) {
+            sampleFromLong[i] = xLong[(int)(rand() % nLong)];
+        }
+        auto median = ArrayToMedians7(sampleFromLong, nShort);
+        double dist = RelativeDistance(medianLong, median, 7);
+        if (dist > maxDist) maxDist = dist;
+    }
+    auto medianShort = ArrayToMedians7(xShort, nShort);
+    double testedDist = RelativeDistance(medianLong, medianShort, 7);
+
+    if (testedDist < maxDist) return true;
+    else return false;
+}
+//end goodness-of-fit test functions
+
 std::unique_ptr<std::unique_ptr<KANAddendPL>[]> Training(
     std::unique_ptr<std::unique_ptr<double[]>[]>& inputs, 
     std::unique_ptr<double[]>& target,
@@ -159,6 +272,8 @@ int main() {
     double minSTD = DBL_MAX;
     double maxSTD = -DBL_MIN;
     int N = 100;
+    int nPassedNestedMedianTests = 0;
+    int nMCSize = 4048;
     int nU = slidingWindow->GetSampleSize();
     for (int i = 0; i < N; ++i) {
         auto input = dataHolder->makeRandomInput();
@@ -170,20 +285,23 @@ int main() {
         //these are two samples, first is return by probabilistic model
         //and second is so-called true aleatoric data
         auto sample = slidingWindow->GetSample(middle, nModels);
-        auto monteCarlo = dataHolder->GetEnsemble(input, 1024);
+        auto monteCarlo = dataHolder->GetEnsemble(input, nMCSize);
         ///////////////////////////////////////////////////////
 
         //below we evaluate accuracy
         double meanSample = GetMean(sample, nU);
-        double meanMonteCarlo = GetMean(monteCarlo, 1024);
+        double meanMonteCarlo = GetMean(monteCarlo, nMCSize);
         double stdSample = GetSTD(sample, nU, meanSample);
-        double stdMonteCarlo = GetSTD(monteCarlo, 1024, meanMonteCarlo);
+        double stdMonteCarlo = GetSTD(monteCarlo, nMCSize, meanMonteCarlo);
         if (meanMonteCarlo > maxMean) maxMean = meanMonteCarlo;
         if (meanMonteCarlo < minMean) minMean = meanMonteCarlo;
         if (stdMonteCarlo > maxSTD) maxSTD = stdMonteCarlo;
         if (stdMonteCarlo < minSTD) minSTD = stdMonteCarlo;
         meanError += (meanSample - meanMonteCarlo) * (meanSample - meanMonteCarlo);
         stdError += (stdSample - stdMonteCarlo) * (stdSample - stdMonteCarlo);
+
+        bool isOk = PassedNestedMedianTest(monteCarlo, sample, nMCSize, nU);
+        if (isOk) ++nPassedNestedMedianTests;
     }
     meanError /= N;
     meanError = sqrt(meanError);
@@ -193,4 +311,5 @@ int main() {
     stdError /= (maxSTD - minSTD);
     printf("Mean relative error for mean ensemble of %d and mean MonteCarlo %6.4f\n", nU, meanError);
     printf("Mean relative error for STD  ensemble of %d and STD  MonteCarlo %6.4f\n", nU, stdError);
+    printf("Passed nested median tests %d from %d\n", nPassedNestedMedianTests, N);
 }
