@@ -259,7 +259,7 @@ int main() {
     resorter->Resort(intermediate, dataHolder->target, 16, dataHolder->nRecords, nModels, 12);
  
     auto slidingWindow = std::make_unique<SlidingWindow>();
-    slidingWindow->BuildEnsemble(intermediate, dataHolder->target, dataHolder->nRecords, nModels, 400, 200, 7);
+    slidingWindow->BuildEnsemble(intermediate, dataHolder->target, dataHolder->nRecords, nModels, 500, 300, 7);
   
     clock_t end_PWL_training = clock();
     printf("Time for training %2.3f sec.\n", (double)(end_PWL_training - start_application) / CLOCKS_PER_SEC);
