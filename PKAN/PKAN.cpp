@@ -311,5 +311,5 @@ int main() {
     stdError /= (maxSTD - minSTD);
     printf("Mean relative error for mean ensemble of %d and mean MonteCarlo %6.4f\n", nU, meanError);
     printf("Mean relative error for STD  ensemble of %d and STD  MonteCarlo %6.4f\n", nU, stdError);
-    printf("Passed nested median tests %d from %d\n", nPassedNestedMedianTests, N);
+    printf("Passed goodness of fit tests %d from %d\n", nPassedNestedMedianTests, N);
 }
